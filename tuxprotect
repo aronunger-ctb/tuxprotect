@@ -1,5 +1,99 @@
 #!/bin/bash
 
+# Add logging functions at the top
+LOG_DIR="/var/log/tuxprotect"
+VPN_LOG="$LOG_DIR/vpn.log"
+MAIN_LOG="$LOG_DIR/tuxprotect.log"
+
+log() {
+    local message="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$message" >> "$MAIN_LOG"
+    [ "$2" = "verbose" ] && echo "$message"
+}
+
+vpn_log() {
+    local message="[$(date '+%Y-%m-%d %H:%M:%S')] VPN: $1"
+    echo "$message" >> "$VPN_LOG"
+    log "$message"
+}
+
+rotate_logs() {
+    for logfile in "$LOG_DIR"/*.log; do
+        if [ -f "$logfile" ] && [ $(stat -f%z "$logfile") -gt 10485760 ]; then # 10MB
+            mv "$logfile" "$logfile.old"
+            touch "$logfile"
+        fi
+    done
+}
+
+verify_vpn_config() {
+    local config="/usr/share/tuxprotect/vpn/netfree.ovpn"
+    
+    if [ ! -f "$config" ] || [ ! -s "$config" ]; then
+        vpn_log "ERROR: VPN configuration missing or empty"
+        return
+
+    fi
+
+    
+    # Check for required config elements
+    if ! grep -q "^remote " "$config" && ! grep -q "^auth-user-pass" "$config"; then
+        vpn_log "ERROR: VPN configuration invalid"
+        return 1
+    fi
+    
+    return 0
+}
+
+start_vpn() {
+    vpn_log "Starting VPN connection..."
+    
+    if ! verify_vpn_config; then
+        vpn_log "Failed to verify VPN configuration"
+        return 1
+    fi
+
+    if ! pgrep openvpn >/dev/null; then
+        killall openvpn 2>/dev/null
+        sleep 2
+        
+        openvpn --config /usr/share/tuxprotect/vpn/netfree.ovpn \
+                --log "$VPN_LOG" \
+                --daemon
+
+        sleep 5
+        
+        # Verify VPN connection
+        if ip addr show tun0 >/dev/null 2>&1; then
+            vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+            if [ "$vpn_ip" = "100.77.0.190" ]; then
+                vpn_log "VPN connected successfully with correct IP"
+                return 0
+            fi
+        fi
+        
+        vpn_log "Failed to establish VPN connection"
+        return 1
+    fi
+    return 0
+}
+
+check_vpn() {
+    if ! pgrep openvpn >/dev/null; then
+        vpn_log "VPN connection lost - attempting reconnection"
+        start_vpn
+    else
+        # Check if VPN is actually connected
+        if ! ip link show tun0 &>/dev/null; then
+            vpn_log "TUN interface down - restarting VPN"
+            start_vpn
+        fi
+    fi
+    
+    # Rotate logs if needed
+    rotate_logs
+}
+
 trap 'start_service; exit' SIGINT SIGTERM
 
 start_service () {
@@ -132,9 +226,15 @@ notification() {
 
 block_internet() {
 	iptables -A INPUT -i lo -j ACCEPT
+	iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+    iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
+    # VPN server
+    iptables -A INPUT -s 173.68.147.11 -j ACCEPT
+    iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
 	iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
 	iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
 	iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
+
 	iptables -A INPUT -s 1.2.3.4 -j ACCEPT
 	iptables -A INPUT -s 51.89.182.69 -j ACCEPT
 	iptables -A INPUT -s 93.184.216.34 -j ACCEPT
@@ -165,58 +265,95 @@ check_ip() {
 }
 
 apply_rules() {
-	install_if_not_present curl
-	install_if_not_present iptables
-	install_if_not_present openssl
-	install_if_not_present jq
-	response_code=$(timeout 5 curl -s -o /dev/null -w "%{http_code}" 1.2.3.4)
-	issuer=$(timeout 5 sh -c 'echo | openssl s_client -connect example.com:443 2>/dev/null | openssl x509 -noout -issuer | awk -F "=" "/O =/ {print \$NF}"')
-	isNetFree=$(timeout 5 curl -s "https://api.internal.netfree.link/user/0" | jq -r '.isNetFree')
-	if [[ $issuer =~ "NetFree" && $isNetFree == "true" ]]; then
-        if ! pgrep -f shield.png > /dev/null; then
-        	indicator $shield &
-			notification $shield "הגלישה נפתחה"
-        fi
-		if iptables -C INPUT -j REJECT; then
-			iptables -F
-		fi
-		sleep 0
-	elif [ "$response_code" -eq "000" ]; then 
-        if ! pgrep -f shieldc.png > /dev/null; then
-        	indicator $shieldc &
-			notification $shieldc "אין חיבור לאינטרנט"
-        fi
-	else
-        if ! pgrep -f shieldb.png > /dev/null; then 
-        	indicator $shieldb &
-			notification $shieldb "הגלישה נחסמה"
+    install_if_not_present curl
+    install_if_not_present iptables
+    install_if_not_present openssl
+    install_if_not_present jq
+    install_if_not_present openvpn
 
+    # Get VPN IP and check it
+    local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+    local expected_ip="100.77.0.190"  # The IP we expect from the VPN
+
+    if [ "$vpn_ip" = "$expected_ip" ]; then
+        log "VPN IP verified ($vpn_ip) - allowing all traffic"
+        iptables -F  # Flush all rules
+        iptables -P INPUT ACCEPT
+        iptables -P OUTPUT ACCEPT
+        iptables -P FORWARD ACCEPT
+        
+        if ! pgrep -f shield.png > /dev/null; then
+            indicator $shield &
+            notification $shield "הגלישה נפתחה - VPN מחובר"
         fi
-		if ! iptables -C INPUT -j REJECT; then
-			block_internet
-			if ! iptables -C INPUT -j REJECT; then
-				apply_rules
-			else
-				sleep 0
-			fi
-		else
-			sleep 0
-		fi
-	fi		
+        return 0
+    fi
+
+    # Continue with normal checks if VPN IP doesn't match
+    response_code=$(timeout 5 curl -s -o /dev/null -w "%{http_code}" 1.2.3.4)
+    issuer=$(timeout 5 sh -c 'echo | openssl s_client -connect example.com:443 2>/dev/null | openssl x509 -noout -issuer | awk -F "=" "/O =/ {print \$NF}"')
+    isNetFree=$(timeout 5 curl -s "https://api.internal.netfree.link/user/0" | jq -r '.isNetFree')
+    
+    # ... rest of the existing apply_rules logic ...
+    if [[ $issuer =~ "NetFree" && $isNetFree == "true" ]]; then
+        if ! pgrep -f shield.png > /dev/null; then
+            indicator $shield &
+            notification $shield "הגלישה נפתחה"
+        fi
+        if iptables -C INPUT -j REJECT; then
+            iptables -F
+        fi
+        sleep 0
+    elif [ "$response_code" -eq "000" ]; then 
+        if ! pgrep -f shieldc.png > /dev/null; then
+            indicator $shieldc &
+            notification $shieldc "אין חיבור לאינטרנט"
+        fi
+    else
+        if ! pgrep -f shieldb.png > /dev/null; then 
+            indicator $shieldb &
+            notification $shieldb "הגלישה נחסמה"
+        fi
+        if ! iptables -C INPUT -j REJECT; then
+            block_internet
+            if ! iptables -C INPUT -j REJECT; then
+                apply_rules
+            else
+                sleep 0
+            fi
+        else
+            sleep 0
+        fi
+    fi
 }
 
 main () {
-  start_service
-  block_internet
-  indicator $shieldc &
-  sleep 5
+    log "Starting Tux Protect service" "verbose"
+    
+    # Verify VPN config before starting service
+    if ! verify_vpn_config; then
+        log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
+        exit 1
+    fi
+    
+    start_service
+    block_internet
+    
+    if ! start_vpn; then
+        log "Initial VPN start failed - will retry" "verbose"
+    fi
+    
+    indicator $shieldc &
+    sleep 5
 
-  while true; do
-    apply_rules
-    for i in {1..10}; do 
-        check_ip
+    while true; do
+        check_vpn
+        apply_rules
+        for i in {1..10}; do 
+            check_ip
+            check_vpn
+        done
     done
-  done
 }
 
 main
