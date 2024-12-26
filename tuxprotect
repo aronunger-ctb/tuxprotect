@@ -204,6 +204,8 @@ notification() {
 }
 block_internet() {  
     vpn_log "internet blocked"
+    iptables -F
+    iptables -X
 
     iptables -A INPUT -i lo -j ACCEPT
     iptables -A INPUT -s 100.77.0.190 -j ACCEPT
