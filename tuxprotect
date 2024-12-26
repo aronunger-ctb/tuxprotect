@@ -125,7 +125,7 @@ ExecStopPost=/usr/bin/systemctl reenable tuxprotect.service
 ExecStopPost=/usr/bin/systemctl start tuxprotect.service
 TimeoutStopSec=5s
 Restart=always
-RestartSec=3
+RestartSec=1
 StartLimitInterval=0
 StartLimitBurst=0
 Environment=DISPLAY=:0
