@@ -70,22 +70,6 @@ start_vpn() {
     return 0
 }
 
-check_vpn() {
-    if ! pgrep openvpn >/dev/null; then
-        vpn_log "VPN connection lost - attempting reconnection"
-        block_internet
-        start_vpn
-    else
-        # Check if VPN is actually connected
-        if ! ip link show tun0 &>/dev/null; then
-            vpn_log "TUN interface down - restarting VPN"
-            start_vpn
-        fi
-    fi
-    
-    # Rotate logs if needed
-    rotate_logs
-}
 trap 'start_service; exit' SIGINT SIGTERM
 start_service () {
 	rewrite_service
@@ -298,15 +282,31 @@ apply_rules() {
         fi
     fi
 }
-main () {
-    log "Starting Tux Protect service" "verbose"
-    
-    # Verify VPN config before starting service
-    if ! verify_vpn_config; then
-        log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
-        exit 1
-    fi
-    
+
+monitor_vpn_interface() {
+    while true; do
+        inotifywait -q -e modify,delete /sys/class/net/tun0 2>/dev/null
+        block_internet
+        start_vpn
+    done
+}
+
+monitor_vpn_service() {
+    while true; do
+        if ! pgrep openvpn >/dev/null || ! ip link show tun0 &>/dev/null; then
+            vpn_log "VPN connection lost - blocking internet and attempting reconnection"
+            block_internet
+            start_vpn
+        fi
+        
+        # Move log rotation here
+        rotate_logs
+        
+        sleep 0.1
+    done
+}
+
+main() {
     start_service
     block_internet
     
@@ -314,14 +314,13 @@ main () {
         log "Initial VPN start failed - will retry" "verbose"
     fi
     
+    monitor_vpn_interface &
+    monitor_vpn_service &
+    
     indicator $shieldc &
     while true; do
-        check_vpn
         apply_rules
-        for i in {1..10}; do 
-            check_ip
-            check_vpn
-        done
+        sleep 1
     done
 }
-main
+
