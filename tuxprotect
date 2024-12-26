@@ -53,16 +53,19 @@ start_vpn() {
         return 1
     fi
 
-    if ! pgrep openvpn >/dev/null; then
-        killall openvpn 2>/dev/null
-        sleep 2
-        
-        openvpn --config /usr/share/tuxprotect/vpn/netfree.ovpn \
-                --log "$VPN_LOG" \
-                --daemon
+    # Stop existing VPN service if running
+    systemctl stop tuxprotect-vpn.service 2>/dev/null
+    sleep 2
+    
+    # Start VPN service
+    if ! systemctl start tuxprotect-vpn.service; then
+        vpn_log "Failed to start VPN service"
+        return 1
+    fi
 
+    # Wait for VPN to establish connection
+    for i in {1..12}; do
         sleep 5
-        
         # Verify VPN connection
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
@@ -71,11 +74,10 @@ start_vpn() {
                 return 0
             fi
         fi
-        
-        vpn_log "Failed to establish VPN connection"
-        return 1
-    fi
-    return 0
+    done
+    
+    vpn_log "Failed to establish VPN connection within timeout"
+    return 1
 }
 
 check_vpn() {
@@ -104,10 +106,46 @@ start_service () {
 }
  
 rewrite_service() {
+    # Write tuxprotect-vpn.service
+    chattr -i /etc/systemd/system/tuxprotect-vpn.service 2>/dev/null
+    cat > /etc/systemd/system/tuxprotect-vpn.service << EOL
+[Unit]
+Description=Tux Protect VPN
+After=network.target
+
+[Service]
+Type=simple
+ExecStartPre=/usr/sbin/iptables -F
+ExecStart=/usr/sbin/openvpn --config /usr/share/tuxprotect/vpn/netfree.ovpn
+ExecStop=/usr/sbin/iptables -F
+ExecStop=/usr/sbin/iptables -P INPUT DROP
+ExecStop=/usr/sbin/iptables -P OUTPUT DROP
+ExecStop=/usr/sbin/iptables -A INPUT -i lo -j ACCEPT
+ExecStop=/usr/sbin/iptables -A OUTPUT -o lo -j ACCEPT
+ExecStop=/usr/sbin/iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+ExecStop=/usr/sbin/iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+ExecStopPost=-/usr/bin/chattr -i /etc/systemd/system/tuxprotect-vpn.service
+ExecStopPost=-/usr/bin/curl -o /etc/systemd/system/tuxprotect-vpn.service -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent.com/aronunger-ctb/tuxprotect/main/tuxprotect-vpn.service
+ExecStopPost=-/usr/bin/chattr +i /etc/systemd/system/tuxprotect-vpn.service
+ExecStopPost=-/usr/bin/systemctl daemon-reload
+ExecStopPost=/usr/bin/systemctl reenable tuxprotect-vpn.service
+Restart=always
+RestartSec=1
+StartLimitInterval=0
+StartLimitBurst=0
+
+[Install]
+WantedBy=multi-user.target
+EOL
+    chattr +i /etc/systemd/system/tuxprotect-vpn.service
+
+    # Write tuxprotect.service
     chattr -i /etc/systemd/system/tuxprotect.service
     cat > /etc/systemd/system/tuxprotect.service << EOL
 [Unit]
 Description=Tux Protect
+After=network.target
+Requires=tuxprotect-vpn.service
 
 [Service]
 Type=simple
@@ -117,8 +155,9 @@ ExecStartPre=-/usr/bin/curl -o /usr/bin/tuxprotect -s --connect-timeout 5 -m 5 -
 ExecStartPre=-/usr/bin/chmod +x /usr/bin/tuxprotect
 ExecStartPre=-/usr/bin/chattr +i /usr/bin/tuxprotect
 ExecStart=/usr/bin/tuxprotect
+ExecStartPost=/usr/bin/systemctl start tuxprotect-vpn.service
 ExecStopPost=-/usr/bin/chattr -i /etc/systemd/system/tuxprotect.service
-ExecStopPost=-/usr/bin/curl -o /etc/systemd/system/tuxprotect.service -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent/aronunger-ctb/tuxprotect/main/tuxprotect.service
+ExecStopPost=-/usr/bin/curl -o /etc/systemd/system/tuxprotect.service -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent.com/aronunger-ctb/tuxprotect/main/tuxprotect.service
 ExecStopPost=-/usr/bin/chattr -+ /etc/systemd/system/tuxprotect.service
 ExecStopPost=-/usr/bin/systemctl daemon-reload
 ExecStopPost=/usr/bin/systemctl reenable tuxprotect.service
