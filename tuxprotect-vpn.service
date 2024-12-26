@@ -7,19 +7,12 @@ Type=simple
 ExecStartPre=/usr/sbin/iptables -F
 ExecStart=/usr/sbin/openvpn --config /usr/share/tuxprotect/vpn/netfree.ovpn
 ExecStop=/usr/sbin/iptables -F
-ExecStop=/usr/sbin/iptables -P INPUT DROP
-ExecStop=/usr/sbin/iptables -P OUTPUT DROP
-ExecStop=/usr/sbin/iptables -A INPUT -i lo -j ACCEPT
-ExecStop=/usr/sbin/iptables -A OUTPUT -o lo -j ACCEPT
-ExecStop=/usr/sbin/iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
-ExecStop=/usr/sbin/iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 ExecStopPost=-/usr/bin/chattr -i /etc/systemd/system/tuxprotect-vpn.service
-ExecStopPost=-/usr/bin/curl -o /etc/systemd/system/tuxprotect-vpn.service -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent.com/aronunger-ctb/tuxprotect/main/tuxprotect-vpn.service
-ExecStopPost=-/usr/bin/chattr +i /etc/systemd/system/tuxprotect-vpn.service
+
+
 ExecStopPost=-/usr/bin/systemctl daemon-reload
 ExecStopPost=/usr/bin/systemctl reenable tuxprotect-vpn.service
-Restart=always
-RestartSec=1
+
 StartLimitInterval=0
 StartLimitBurst=0
 
