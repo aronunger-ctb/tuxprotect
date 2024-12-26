@@ -202,14 +202,16 @@ notification() {
 	$bus notify-send "Tux Protect" $content -i "$icon" -t 20
 	fi
 }
-block_internet() {
-	iptables -A INPUT -i lo -j ACCEPT
-	iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+block_internet() {  
+    vpn_log "internet blocked"
+
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A INPUT -s 100.77.0.190 -j ACCEPT
     iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
     # VPN server
     iptables -A INPUT -s 173.68.147.11 -j ACCEPT
     iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
-	iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
+    iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
 	iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
 	iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
 	iptables -A INPUT -s 1.2.3.4 -j ACCEPT
