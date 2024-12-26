@@ -315,7 +315,6 @@ main () {
     fi
     
     indicator $shieldc &
-    sleep 5
     while true; do
         check_vpn
         apply_rules
