@@ -222,6 +222,9 @@ block_internet() {
 	iptables -A INPUT -p udp --dport 53 -j ACCEPT
 	iptables -A INPUT -p tcp --dport 53 -j ACCEPT
 	iptables -A INPUT -j REJECT
+       iptables -L -v -n 2>&1 | while IFS= read -r line; do
+        vpn_log "$line"
+    done
 }
 check_ip() {
 	current_ip=$(ip a show | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
