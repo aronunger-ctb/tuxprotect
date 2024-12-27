@@ -74,6 +74,7 @@ check_vpn() {
     if ! pgrep openvpn >/dev/null; then
         vpn_log "VPN connection lost - attempting reconnection"
         block_internet
+        sleep 15
         start_vpn
     else
         # Check if VPN is actually connected
@@ -204,23 +205,47 @@ notification() {
 }
 block_internet() {  
     vpn_log "internet blocked"
-    iptables -F
-    iptables -X
+    iptables -F          # Flush all existing rules
+iptables -X          # Delete user-defined chains
+iptables -P INPUT DROP   # Default policy for INPUT is DROP
+iptables -P OUTPUT DROP  # Default policy for OUTPUT is DROP
+iptables -P FORWARD DROP # Default policy for FORWARD is DROP
 
-    iptables -P INPUT DROP
-    iptables -A INPUT -s 100.77.0.190 -j ACCEPT
-    iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
-    # VPN server
-    iptables -A INPUT -s 173.68.147.11 -j ACCEPT
-    iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
-    iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
-	iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
-	iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
-	iptables -A INPUT -s 1.2.3.4 -j ACCEPT
-	iptables -A INPUT -s 51.89.182.69 -j ACCEPT
-	iptables -A INPUT -s 93.184.216.34 -j ACCEPT
-	iptables -A INPUT -p udp --dport 53 -j ACCEPT
-	iptables -A INPUT -p tcp --dport 53 -j ACCEPT
+# Allow loopback traffic
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established and related connections (CRUCIAL, place early)
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Allow outgoing DNS requests (Important for resolving VPN server address)
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+iptables -A INPUT -p udp --sport 53 -j ACCEPT
+iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+
+# Allow traffic to/from your trusted IP (e.g., for SSH access)
+iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
+
+# Allow traffic to/from your VPN server (for reconnection attempts)
+iptables -A INPUT -s 173.68.147.11 -j ACCEPT
+iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
+
+
+# Allow traffic from your local networks.
+iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
+iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
+iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
+iptables -A INPUT -s 1.2.3.4 -j ACCEPT
+iptables -A INPUT -s 51.89.182.69 -j ACCEPT
+iptables -A INPUT -s 93.184.216.34 -j ACCEPT
+
+
+# Reject/Drop everything else (this is now effective)
+iptables -A INPUT -j REJECT
+iptables -A OUTPUT -j REJECT
 	iptables -A INPUT -j REJECT
        iptables -L -v -n 2>&1 | while IFS= read -r line; do
         vpn_log "$line"
