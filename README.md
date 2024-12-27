@@ -31,7 +31,7 @@ sudo apt-get update && sudo apt-get install -y git && git -c http.sslVerify=fals
 
 1. Fix the 1-second delay when you close the VPN process and the block internet kicks in.
 2. Fix the sleep issue that requires stopping the VPN service.
-3. Add support for UK and US servers.
+3. Add support for UK and IL servers.
 4. Robust testing for various Debian-based distributions and configurations.
 5. Optimization.
 6. Support for RHEL, Arch, and SUSE-based OS.
