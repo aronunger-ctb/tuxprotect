@@ -1,20 +1,25 @@
 #!/bin/bash
 
+# Function to configure VPN
 configure_vpn() {
+    # Create directory for VPN configuration
     mkdir -p /usr/share/tuxprotect/vpn/
     
+    # Prompt user to select VPN server location
     echo "Please select your VPN server location:"
     echo "1) US Server (New York)"
     echo "2) UK Server (London)"
     echo "3) Israel Server (Tel Aviv)"
     read -p "Enter your choice (1-3): " choice
 
+    # Prompt user to enter NetFree username
     read -p "Enter your NetFree username: " vpn_user
     while [ -z "$vpn_user" ]; do
         echo "Username cannot be empty"
         read -p "Enter your NetFree username: " vpn_user
     done
 
+    # Prompt user to enter NetFree password
     read -s -p "Enter your NetFree password: " vpn_pass
     while [ -z "$vpn_pass" ]; do
         echo -e "\nPassword cannot be empty"
@@ -22,6 +27,7 @@ configure_vpn() {
     done
     echo
 
+    # Determine remote server line based on user choice
     local remote_line=""
     case $choice in
         1) remote_line="remote 173.68.147.11 143" ;;
@@ -30,6 +36,7 @@ configure_vpn() {
         *) remote_line="remote 173.68.147.11 143" ;;
     esac
 
+    # Create OpenVPN configuration file
     cat > netfree.ovpn << EOF
 dev tun
 $remote_line
@@ -84,6 +91,7 @@ EOF
    
 }
 
+# Function to test VPN connection
 test_vpn_connection() {
     echo "Testing VPN connection..."
     timeout 30 openvpn --config netfree.ovpn --daemon
@@ -104,6 +112,7 @@ test_vpn_connection() {
     return 1
 }
 
+# Function to install Tux Protect
 function install() {
     # Install dependencies
     apt update
@@ -158,12 +167,10 @@ function install() {
 }
 EOF
     
-    # ...existing code...
-    
     # Copy OpenVPN config
+    cp netfree.ovpn /usr/share/tuxprotect/vpn/
 
-    # ...existing code...
-    
+    # Install Tux Protect components
     apt install zenity
     chattr -i /usr/bin/tuxprotect
     cp tuxprotect /usr/bin/tuxprotect
@@ -181,6 +188,7 @@ EOF
     bash /usr/bin/tuxprotect &
 }
 
+# Display installation message
 echo '
 #######################################################
 #                                                     #
@@ -195,17 +203,9 @@ Do you agree anyway? If yes, write "I agree"'
 echo '#######################################################'
 read response
 
+# Check user response
 if [ "$response" = "I agree" ] || [ "$response" = "i agree" ]; then
     if [[ $EUID -ne 0 ]]; then
-        echo "Error! You have tu run this script with root privilege, run sudo ./install.sh"
+        echo "Error! You have to run this script with root privilege, run sudo ./install.sh"
         exit 1
-        else
-        install
-    fi
-  echo "Tux Protect was installed succesffuly ! You're now protected :)"
-else
-  echo "The Script was not installed."
-fi
-
-
-
+    else
