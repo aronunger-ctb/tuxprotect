@@ -74,11 +74,13 @@ check_vpn() {
     if ! pgrep openvpn >/dev/null; then
         vpn_log "VPN connection lost - attempting reconnection"
         block_internet
+        sleep 30
         start_vpn
     else
         # Check if VPN is actually connected
         if ! ip link show tun0 &>/dev/null; then
             vpn_log "TUN interface down - restarting VPN"
+              
             start_vpn
         fi
     fi
@@ -281,10 +283,56 @@ apply_rules() {
     local expected_ip="100.77.0.190"  # The IP we expect from the VPN
     if [ "$vpn_ip" = "$expected_ip" ]; then
         log "VPN IP verified ($vpn_ip) - allowing all traffic"
-        iptables -F  # Flush all rules
-        iptables -P INPUT ACCEPT
-        iptables -P OUTPUT ACCEPT
-        iptables -P FORWARD ACCEPT
+                      
+
+# Flush existing iptables rules (BE VERY CAREFUL IN PRODUCTION)
+sudo iptables -F
+sudo iptables -X
+
+# Set default policies to DROP (crucial for security)
+sudo iptables -P INPUT DROP
+sudo iptables -P FORWARD DROP
+sudo iptables -P OUTPUT DROP
+
+# Allow loopback traffic
+sudo iptables -A INPUT -i lo -j ACCEPT
+sudo iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established and related connections ONLY for the specified IPs (both directions)
+sudo iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -s 173.68.147.11,100.77.0.190 -j ACCEPT
+sudo iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -d 173.68.147.11,100.77.0.190 -j ACCEPT
+
+# Allow inbound from your public IP (for services you want to expose)
+sudo iptables -A INPUT -s 173.68.147.11 -j ACCEPT
+
+# Allow inbound from your private IP (for local network access)
+sudo iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+
+# Allow outbound from your public IP
+sudo iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
+
+# Allow outbound from your private IP
+sudo iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
+
+# Allow DNS resolution (port 53 UDP and TCP) for specified IPs
+sudo iptables -A OUTPUT -p udp --dport 53 -d 173.68.147.11,100.77.0.190 -j ACCEPT
+sudo iptables -A OUTPUT -p tcp --dport 53 -d 173.68.147.11,100.77.0.190 -j ACCEPT
+
+# Allow ICMP (ping) for specified IPs
+sudo iptables -A INPUT -p icmp --icmp-type 8 -s 173.68.147.11,100.77.0.190 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+sudo iptables -A OUTPUT -p icmp --icmp-type 0 -d 173.68.147.11,100.77.0.190 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+
+# Log dropped packets (Highly Recommended for Debugging)
+sudo iptables -A INPUT -j LOG --log-prefix "IPTABLES INPUT DROP: "
+sudo iptables -A FORWARD -j LOG --log-prefix "IPTABLES FORWARD DROP: "
+sudo iptables -A OUTPUT -j LOG --log-prefix "IPTABLES OUTPUT DROP: "
+
+# Save the rules (Debian/Ubuntu)
+sudo iptables-save > /etc/iptables/rules.v4
+
+echo "Iptables rules applied."
+
 
         if ! pgrep -f shield.png > /dev/null; then
             indicator $shield &
