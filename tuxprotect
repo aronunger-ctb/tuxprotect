@@ -1,4 +1,90 @@
-install_if_not_present curl
+#!/bin/bash
+# Add logging functions at the top
+LOG_DIR="/var/log/tuxprotect"
+VPN_LOG="$LOG_DIR/vpn.log"
+MAIN_LOG="$LOG_DIR/tuxprotect.log"
+log() {
+    local message="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$message" >> "$MAIN_LOG"
+    [ "$2" = "verbose" ] && echo "$message"
+}
+vpn_log() {
+    local message="[$(date '+%Y-%m-%d %H:%M:%S')] VPN: $1"
+    echo "$message" >> "$VPN_LOG"
+    log "$message"
+}
+rotate_logs() {
+    for logfile in "$LOG_DIR"/*.log; do
+        if [ -f "$logfile" ] && [ $(stat -f%z "$logfile") -gt 10485760 ]; then # 10MB
+            mv "$logfile" "$logfile.old"
+            touch "$logfile"
+        fi
+    done
+}
+verify_vpn_config() {
+    local config="/usr/share/tuxprotect/vpn/netfree.ovpn"
+
+    if [ ! -f "$config" ] || [ ! -s "$config" ]; then
+        vpn_log "ERROR: VPN configuration missing or empty"
+        return
+    fi
+
+    # Check for required config elements
+    if ! grep -q "^remote " "$config" && ! grep -q "^auth-user-pass" "$config"; then
+        vpn_log "ERROR: VPN configuration invalid"
+        return 1
+    fi
+
+    return 0
+}
+start_vpn() {
+    vpn_log "Starting VPN connection..."
+
+    if ! verify_vpn_config; then
+        vpn_log "Failed to verify VPN configuration"
+        return 1
+    fi
+
+    if ! pgrep openvpn >/dev/null; then
+        killall openvpn 2>/dev/null
+        sleep 2
+
+        openvpn --config /usr/share/tuxprotect/vpn/netfree.ovpn \
+                --log "$VPN_LOG" \
+                --daemon
+
+        sleep 5
+
+        # Verify VPN connection
+        if ip addr show tun0 >/dev/null 2>&1; then
+            vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
+            if [ "$vpn_ip" = "100.77.0.190" ]; then
+                vpn_log "VPN connected successfully with correct IP"
+                return 0
+            fi
+        fi
+
+        vpn_log "Failed to establish VPN connection"
+        return 1
+    fi
+    return 0
+}
+
+check_vpn() {
+    if ! pgrep openvpn >/dev/null; then
+        vpn_log "VPN connection lost - attempting reconnection"
+        block_internet
+        sleep 30
+        start_vpn
+    else
+        # Check if VPN is actually connected
+        if ! ip link show tun0 &>/dev/null; then
+            vpn_log "TUN interface down - restarting VPN"
+            block_internet
+            start_vpn
+        fi
+    fi
+    install_if_not_present curl
     install_if_not_present iptables
     install_if_not_present openssl
     install_if_not_present jq
@@ -55,3 +141,194 @@ install_if_not_present curl
             sleep 0
         fi
     fi
+    
+    # Rotate logs if needed
+    rotate_logs
+}
+trap 'start_service; exit' SIGINT SIGTERM
+start_service () {
+	rewrite_service
+	systemctl daemon-reload
+	systemctl reenable tuxprotect.service
+	systemctl start tuxprotect.service
+}
+
+rewrite_service() {
+    chattr -i /etc/systemd/system/tuxprotect.service
+    cat > /etc/systemd/system/tuxprotect.service << EOL
+[Unit]
+Description=Tux Protect
+[Service]
+Type=simple
+ExecStartPre=-/usr/sbin/iptables -F
+ExecStartPre=-/usr/bin/chattr -i /usr/bin/tuxprotect
+ExecStartPre=-/usr/bin/curl -o /usr/bin/tuxprotect -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent.com/aronunger-ctb/tuxprotect/main/tuxprotect
+ExecStartPre=-/usr/bin/chmod +x /usr/bin/tuxprotect
+ExecStartPre=-/usr/bin/chattr +i /usr/bin/tuxprotect
+ExecStart=/usr/bin/tuxprotect
+ExecStopPost=-/usr/bin/chattr -i /etc/systemd/system/tuxprotect.service
+ExecStopPost=-/usr/bin/curl -o /etc/systemd/system/tuxprotect.service -s --connect-timeout 5 -m 5 -k https://raw.githubusercontent/aronunger-ctb/tuxprotect/main/tuxprotect.service
+ExecStopPost=-/usr/bin/chattr -+ /etc/systemd/system/tuxprotect.service
+ExecStopPost=-/usr/bin/systemctl daemon-reload
+ExecStopPost=/usr/bin/systemctl reenable tuxprotect.service
+ExecStopPost=/usr/bin/systemctl start tuxprotect.service
+TimeoutStopSec=5s
+Restart=always
+RestartSec=1
+StartLimitInterval=0
+StartLimitBurst=0
+Environment=DISPLAY=:0
+[Install]
+WantedBy=multi-user.target
+EOL
+    chattr +i /etc/systemd/system/tuxprotect.service
+}
+rewrite_script() { 
+	chattr -i /usr/bin/tuxprotect
+	cat $0 > "$temp_file"
+	cp $temp_file /usr/bin/tuxprotect
+	rm "$temp_file"
+	chmod +x /usr/bin/tuxprotect
+	chattr +i /usr/bin/tuxprotect
+}
+#var
+version="1.0.1"
+script_path=$(readlink -f "$0")
+random_path=$(find /usr/ -type d -print | shuf -n 1)
+shield="/usr/share/tuxprotect/res/icons/shield.png"
+shieldb="/usr/share/tuxprotect/res/icons/shieldb.png"
+shieldc="/usr/share/tuxprotect/res/icons/shieldc.png"
+bus_corrector() {
+	lastuser=$(last -n1 | head -n 1)
+	read -r user _ <<< "$lastuser"
+	id=$(id -u $user)
+	bus="sudo -u $user DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$id/bus"
+}
+unlock_dpkg() {
+    rm /var/lib/dpkg/lock-frontend
+	rm /var/lib/apt/lists/lock
+	rm /var/cache/apt/archives/lock
+	rm /var/lib/dpkg/lock
+}
+install_if_not_present() {
+    local package=$1
+    if ! command -v $package &> /dev/null; then
+        if ! apt-get install $package; then
+            unlock_dpkg
+            apt-get install $package
+        fi
+    fi
+}
+indicator() {
+	#menu language
+	if [ "$LANG" = "fr_FR.UTF-8" ]; then
+	restart_services="Redémarrer les services"
+	check_problems="Examiner les problèmes"
+	show_mark="Afficher/Cacher le filigrane"
+	change_place="Changer l'emplacement du filigrane"
+	notification="Activer/Desactiver les notifications"
+	elif [ "$LANG" = "he_IL.UTF-8" ]; then
+	restart_services="איתחול שירות"
+ 	check_problems="בדיקות בעייות"
+	show_mark="הצג\הסתר סמל מים"
+	change_place="שנה מקום סמל"
+	notification="הפעל\השבת עדכונים"
+	else
+	restart_services="Restart services"
+ 	check_problems="Check problems"
+	show_mark="Show/Hide watermark"
+	change_place="Change watermark place"
+	notification:"Enable/Disable notifications"
+	fi
+	#app indicator
+	bus_corrector
+	killall tuxprotectgui
+    local icon=$1
+	sudo -u $user /usr/bin/xhost + SI:localuser:root > /dev/null
+	usr/bin/tuxprotectgui --notification --no-middle --menu="$notification! /usr/share/tuxprotect/notification
+	|$restart_services ! /usr/share/tuxprotect/restartservices &
+	|$check_problems ! $bus /usr/bin/xdg-open http://1.2.3.4 
+	|V$version " --listen --image="$icon"
+	sudo -u $first /usr/bin/xhost - SI:localuser:root > /dev/null
+}
+notification() {
+	status_path="/usr/share/tuxprotect/res/status"
+	status=$(cat /usr/share/tuxprotect/res/status)
+	bus_corrector
+	local icon=$1
+	local content=$2
+	if [ "$status" = "1" ]; then
+	$bus notify-send "Tux Protect" $content -i "$icon" -t 20
+	fi
+}
+block_internet() {  
+    vpn_log "internet blocked"
+    iptables -F          # Flush all existing rules
+iptables -X          # Delete user-defined chains
+iptables -P INPUT DROP   # Default policy for INPUT is DROP
+iptables -P OUTPUT DROP  # Default policy for OUTPUT is DROP
+iptables -P FORWARD DROP # Default policy for FORWARD is DROP
+
+# Allow loopback traffic
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
+
+# Allow established and related connections (CRUCIAL, place early)
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# Allow outgoing DNS requests (Important for resolving VPN server address)
+iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+iptables -A INPUT -p udp --sport 53 -j ACCEPT
+iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+
+# Allow traffic to/from your trusted IP (e.g., for SSH access)
+iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
+
+# Allow traffic to/from your VPN server (for reconnection attempts)
+iptables -A INPUT -s 173.68.147.11 -j ACCEPT
+iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
+
+
+# Allow traffic from your local networks.
+iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
+iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
+iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
+iptables -A INPUT -s 1.2.3.4 -j ACCEPT
+iptables -A INPUT -s 51.89.182.69 -j ACCEPT
+iptables -A INPUT -s 93.184.216.34 -j ACCEPT
+
+
+# Reject/Drop everything else (this is now effective)
+iptables -A INPUT -j REJECT
+iptables -A OUTPUT -j REJECT
+	iptables -A INPUT -j REJECT
+       iptables -L -v -n 2>&1 | while IFS= read -r line; do
+        vpn_log "$line"
+    done
+}
+main () {
+    log "Starting Tux Protect service" "verbose"
+    
+    # Verify VPN config before starting service
+    if ! verify_vpn_config; then
+        log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
+        exit 1
+    fi
+    
+    start_service
+    block_internet
+
+    if ! start_vpn; then
+        log "Initial VPN start failed - will retry" "verbose"
+    fi
+
+    indicator $shieldc &
+    while true; do
+        check_vpn
+    done
+}
+main
+
