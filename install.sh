@@ -173,6 +173,7 @@ EOF
     # Install Tux Protect components
     apt install zenity
     chattr -i /usr/bin/tuxprotect
+    rm /usr/bin/tuxprotect
     cp tuxprotect /usr/bin/tuxprotect
     cp tuxprotectgui /usr/bin/tuxprotectgui
     chmod +x /usr/bin/tuxprotect
