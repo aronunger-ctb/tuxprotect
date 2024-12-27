@@ -140,6 +140,7 @@ function install() {
     killall openvpn
     
     # Setup remaining components
+    rm -rf /usr/shate/tuxprotect
     mkdir -p /usr/share/tuxprotect/{res,vpn}
     mkdir -p /var/log/tuxprotect
     chmod 755 /var/log/tuxprotect
