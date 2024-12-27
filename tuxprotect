@@ -74,7 +74,6 @@ check_vpn() {
     if ! pgrep openvpn >/dev/null; then
         vpn_log "VPN connection lost - attempting reconnection"
         block_internet
-        sleep 15
         start_vpn
     else
         # Check if VPN is actually connected
