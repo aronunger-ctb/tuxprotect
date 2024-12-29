@@ -149,11 +149,8 @@ check_vpn() {
 vpnup_status (){  
     sleep 60
     if ! ping -c 1 -W 60 173.68.147.11; then
-        vpn_log "VPN connection not responding - forcing restart"
-        block_internet
-        killall openvpn
-        sleep 2
-        start_vpn
+        vpn_log "VPN connection not responding - forcing restart"        
+        killall openvpn    
     fi
 }
 trap 'start_service; exit' SIGINT SIGTERM
@@ -338,7 +335,7 @@ main () {
 
     indicator $shieldc &
     while true; do
-        check_vpn
+        check_vpn &
         vpnup_status
     done
 }
