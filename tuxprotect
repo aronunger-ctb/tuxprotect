@@ -84,7 +84,7 @@ check_vpn() {
             start_vpn
         fi
     fi
-    if ! ping -c 1 -W 5 100.77.0.190; then
+    if ! ping -c 1 -W 5 173.68.147.11; then
         vpn_log "VPN connection not responding - forcing restart"
         block_internet
         killall openvpn
