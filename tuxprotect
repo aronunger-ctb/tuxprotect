@@ -331,12 +331,14 @@ main () {
 
     if ! start_vpn; then
         log "Initial VPN start failed - will retry" "verbose"
+
     fi
 
     indicator $shieldc &
     while true; do
         check_vpn &
-        vpnup_status
+
+       
     done
 }
 main
