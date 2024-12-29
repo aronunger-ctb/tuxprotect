@@ -339,7 +339,7 @@ main () {
     indicator $shieldc &
     while true; do
         check_vpn
-        vpnup_status &
+        vpnup_status
     done
 }
 main
