@@ -90,7 +90,6 @@ check_vpn() {
         killall openvpn
         sleep 2
         start_vpn
-        return
     fi
     install_if_not_present curl
     install_if_not_present iptables
