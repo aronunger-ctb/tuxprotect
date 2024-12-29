@@ -99,14 +99,6 @@ check_vpn() {
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT  
-        if ! ping -c 1 -W 5 173.68.147.11 then
-        vpn_log "VPN connection not responding - forcing restart"
-        block_internet
-        killall openvpn       
-        sleep 2
-        start_vpn
-        return
-    fi
         if ! pgrep -f shield.png > /dev/null; then
             indicator $shield &
             notification $shield "הגלישה נפתחה - VPN מחובר"
