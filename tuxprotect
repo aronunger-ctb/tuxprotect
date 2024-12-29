@@ -93,14 +93,7 @@ check_vpn() {
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT 
     fi
-    sleep 60
-    if ! ping -c 1 -W 60 173.68.147.11; then
-        vpn_log "VPN connection not responding - forcing restart"
-        block_internet
-        killall openvpn
-        sleep 2
-        start_vpn
-    fi
+   
     install_if_not_present curl
     install_if_not_present iptables
     install_if_not_present openssl
@@ -152,6 +145,16 @@ check_vpn() {
     
     # Rotate logs if needed
     rotate_logs
+}
+vpnup_status (){  
+    sleep 60
+    if ! ping -c 1 -W 60 173.68.147.11; then
+        vpn_log "VPN connection not responding - forcing restart"
+        block_internet
+        killall openvpn
+        sleep 2
+        start_vpn
+    fi
 }
 trap 'start_service; exit' SIGINT SIGTERM
 start_service () {
@@ -336,6 +339,7 @@ main () {
     indicator $shieldc &
     while true; do
         check_vpn
+        vpnup_status &
     done
 }
 main
