@@ -129,7 +129,7 @@ check_vpn() {
         if ! pgrep -f shieldb.png > /dev/null; then 
             indicator $shieldb &
             notification $shieldb "הגלישה נחסמה"
-        fi  timeout 5 ping -c 1 "$VPN_TEST_IP" >/dev/null 2>&1
+        fi
         if ! iptables -C INPUT -j REJECT; then
             block_internet
             if ! iptables -C INPUT -j REJECT; then
