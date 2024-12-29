@@ -93,6 +93,7 @@ check_vpn() {
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT 
     fi
+    vpnup_status &
    
     install_if_not_present curl
     install_if_not_present iptables
