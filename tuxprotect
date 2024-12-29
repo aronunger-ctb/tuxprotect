@@ -98,7 +98,15 @@ check_vpn() {
         iptables -F  # Flush all rules
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
-        iptables -P FORWARD ACCEPT                    
+        iptables -P FORWARD ACCEPT  
+        if ! ping -c 1 -W 5 173.68.147.11 then
+        vpn_log "VPN connection not responding - forcing restart"
+        block_internet
+        killall openvpn       
+        sleep 2
+        start_vpn
+        return
+    fi
         if ! pgrep -f shield.png > /dev/null; then
             indicator $shield &
             notification $shield "הגלישה נפתחה - VPN מחובר"
@@ -129,7 +137,7 @@ check_vpn() {
         if ! pgrep -f shieldb.png > /dev/null; then 
             indicator $shieldb &
             notification $shieldb "הגלישה נחסמה"
-        fi
+        fi  timeout 5 ping -c 1 "$VPN_TEST_IP" >/dev/null 2>&1
         if ! iptables -C INPUT -j REJECT; then
             block_internet
             if ! iptables -C INPUT -j REJECT; then
