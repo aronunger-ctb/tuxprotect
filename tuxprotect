@@ -112,8 +112,8 @@ check_vpn() {
 vpnup_status (){  
      touch /tmp/vpnup_status.lock
     while true; do
-        sleep 20
-        if ! ping -c 1 -W 5 173.68.147.11 >/dev/null 2>&1; then
+        sleep 60
+        if ! ping -c 1 -W 10 173.68.147.11 >/dev/null 2>&1; then
             log "VPN connection not responding - forcing restart"
             killall openvpn
         fi
