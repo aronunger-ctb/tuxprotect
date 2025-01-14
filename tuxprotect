@@ -58,7 +58,7 @@ start_vpn() {
         # Verify VPN connection
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-            if [ "$vpn_ip" = "100.77.0.190" ]; then
+            if [ "$vpn_ip" = "100.77.0.14" ]; then
                 vpn_log "VPN connected successfully with correct IP"
                 return 0
             fi
