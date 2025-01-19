@@ -116,6 +116,7 @@ vpnup_status (){
         if ! ping -c 1 -W 10 173.68.147.11 >/dev/null 2>&1; then
             log "VPN connection not responding - forcing restart"
             killall openvpn
+            block_internet
         fi
     done
     rm /tmp/vpnup_status.lock
