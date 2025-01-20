@@ -95,7 +95,7 @@ check_vpn() {
         fi
     fi
     local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    local expected_ip="100.77.0.190"  # The IP we expect from the VPN
+    local expected_ip="100.77.0.14"  # The IP we expect from the VPN
     if [ "$vpn_ip" = "$expected_ip" ]; then
         if [ ! -f /tmp/vpn_ip_verified ]; then
             log "VPN IP verified ($vpn_ip) - allowing all traffic"
