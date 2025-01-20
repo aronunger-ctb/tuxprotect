@@ -135,42 +135,44 @@ vpnup_status (){
 block_vbox_briged_adapters() {
     # stops a virtualbox machine if it detects a bridged adapter
     touch /tmp/vbox_bridged.lock
-    # Get a list of all VMs (names and UUIDs)
-    vms=$(VBoxManage list vms)
+    while true; do
+    	# Get a list of all VMs (names and UUIDs)
+    	vms=$(VBoxManage list vms)
 
-    # Loop through each VM entry
-    while IFS= read -r vm; do
-        # Extract VM name and UUID using regex
-        vm_name=$(echo "$vm" | grep -oP '^"\K[^"]+(?=")')
-        vm_uuid=$(echo "$vm" | grep -oP '{\K[^}]+(?=})')
+    	# Loop through each VM entry
+    	while IFS= read -r vm; do
+       	 # Extract VM name and UUID using regex
+      	  vm_name=$(echo "$vm" | grep -oP '^"\K[^"]+(?=")')
+      	  vm_uuid=$(echo "$vm" | grep -oP '{\K[^}]+(?=})')
 
-        # Skip if either name or UUID is missing
-        if [[ -z $vm_name || -z $vm_uuid ]]; then
-            log "Error processing VM entry: $vm"
-            continue
-        fi
+        	# Skip if either name or UUID is missing
+        	if [[ -z $vm_name || -z $vm_uuid ]]; then
+            	log "Error processing VM entry: $vm"
+            	continue
+        	fi
 
-        log "Checking VM: $vm_name ($vm_uuid)"
+        	log "Checking VM: $vm_name ($vm_uuid)"
 
-        # Check network adapters for bridged mode
-        for adapter in {1..4}; do
-            nic_type=$(VBoxManage showvminfo "$vm_uuid" --machinereadable | grep "nic$adapter" | cut -d'=' -f2 | tr -d '"')
+        	# Check network adapters for bridged mode
+        	for adapter in {1..4}; do
+            	nic_type=$(VBoxManage showvminfo "$vm_uuid" --machinereadable | grep "nic$adapter" | cut -d'=' -f2 | tr -d '"')
 
-            if [[ $nic_type == "bridged" ]]; then
-                log "VM '$vm_name' ($vm_uuid) is using a bridged network on adapter $adapter."
+            	if [[ $nic_type == "bridged" ]]; then
+                	log "VM '$vm_name' ($vm_uuid) is using a bridged network on adapter $adapter."
 
-                # Stop the VM if it is running
-                vm_state=$(VBoxManage showvminfo "$vm_uuid" --machinereadable | grep -E '^VMState=' | cut -d'=' -f2 | tr -d '"')
-                if [[ $vm_state == "running" ]]; then
-                    log "Stopping VM: $vm_name"
-                    VBoxManage controlvm "$vm_uuid" poweroff
-                fi
+                	# Stop the VM if it is running
+                	vm_state=$(VBoxManage showvminfo "$vm_uuid" --machinereadable | grep -E '^VMState=' | cut -d'=' -f2 | tr -d '"')
+                	if [[ $vm_state == "running" ]]; then
+                    		log "Stopping VM: $vm_name"
+                    		VBoxManage controlvm "$vm_uuid" poweroff
+                	fi
 
-                # Break out of adapter loop as we only need one bridged network to stop
-                break
-            fi
-        done
-    done <<< "$vms"
+                	# Break out of adapter loop as we only need one bridged network to stop
+                	break
+            	fi
+        	done
+    	done <<< "$vms"
+    done
     rm /tmp/vbox_bridged.lock
 }
    
