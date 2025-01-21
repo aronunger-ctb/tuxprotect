@@ -84,32 +84,32 @@ check_vpn() {
         fi
     fi
     local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    local expected_ip="100.77.0.190"  # The IP we expect from the VPN
+    local expected_ip="100.77.0.14"  # The IP we expect from the VPN
     if [ "$vpn_ip" = "$expected_ip" ]; then
         log "VPN IP verified ($vpn_ip) - allowing all traffic"
-        
+
         iptables -F  # Flush all rules
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
-        iptables -P FORWARD ACCEPT 
+        iptables -P FORWARD ACCEPT
     fi
     if [ ! -f /tmp/vpnup_status.lock ]; then
         vpnup_status &
     fi
-   
+
     install_if_not_present curl
     install_if_not_present iptables
     install_if_not_present openssl
     install_if_not_present jq
     install_if_not_present openvpn
     # Get VPN IP and check it
-     
 
-    
+
+
     # Rotate logs if needed
     rotate_logs
 }
-vpnup_status (){  
+vpnup_status (){
      touch /tmp/vpnup_status.lock
     while true; do
         sleep 60
@@ -165,7 +165,7 @@ block_vbox_briged_adapters() {
             done
         done <<< "$vms"
 
-        sleep 60  # Check every 60 seconds
+        sleep 5  # Check every 60 seconds
     done
 }
 
@@ -207,7 +207,7 @@ WantedBy=multi-user.target
 EOL
     chattr +i /etc/systemd/system/tuxprotect.service
 }
-rewrite_script() { 
+rewrite_script() {
 	chattr -i /usr/bin/tuxprotect
 	cat $0 > "$temp_file"
 	cp $temp_file /usr/bin/tuxprotect
@@ -271,7 +271,7 @@ indicator() {
 	sudo -u $user /usr/bin/xhost + SI:localuser:root > /dev/null
 	usr/bin/tuxprotectgui --notification --no-middle --menu="$notification! /usr/share/tuxprotect/notification
 	|$restart_services ! /usr/share/tuxprotect/restartservices &
-	|$check_problems ! $bus /usr/bin/xdg-open http://1.2.3.4 
+	|$check_problems ! $bus /usr/bin/xdg-open http://1.2.3.4
 	|V$version " --listen --image="$icon"
 	sudo -u $first /usr/bin/xhost - SI:localuser:root > /dev/null
 }
@@ -285,7 +285,7 @@ notification() {
 	$bus notify-send "Tux Protect" $content -i "$icon" -t 20
 	fi
 }
-block_internet() {  
+block_internet() {
     vpn_log "internet blocked"
     iptables -F          # Flush all existing rules
 iptables -X          # Delete user-defined chains
@@ -335,13 +335,13 @@ iptables -A OUTPUT -j REJECT
 }
 main () {
     log "Starting Tux Protect service" "verbose"
-    
+
     # Verify VPN config before starting service
     if ! verify_vpn_config; then
         log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
         exit 1
     fi
-    
+
     start_service
     block_internet
 
@@ -358,4 +358,7 @@ main () {
     done
 }
 main
+
+
+
 
