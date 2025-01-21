@@ -122,7 +122,6 @@ vpnup_status (){
     rm /tmp/vpnup_status.lock
 }
 block_vbox_briged_adapters() {
-    # stops a virtualbox machine if it detects a bridged adapter
     local_user=$(logname)
     export LOGNAME=$local_user
     export USER=$local_user
@@ -130,16 +129,23 @@ block_vbox_briged_adapters() {
     while true; do
         # Get a list of all VMs (names and UUIDs)
         vms=$(sudo -u $local_user VBoxManage list vms)
+        log "vm"
 
         # Loop through each VM entry
         while IFS= read -r vm; do
+            # Skip empty or invalid lines
+            if [[ -z $vm || $vm =~ ^[[:space:]]*$ ]]; then
+                log "Skipping empty or invalid VM entry"
+                continue
+            fi
+
             # Extract VM name and UUID using regex
             vm_name=$(echo "$vm" | grep -oP '^"\K[^"]+(?=")')
             vm_uuid=$(echo "$vm" | grep -oP '{\K[^}]+(?=})')
 
             # Skip if either name or UUID is missing
             if [[ -z $vm_name || -z $vm_uuid ]]; then
-                log "Error processing VM entry: $vm"
+                log "Error processing VM entry (missing name or UUID): $vm"
                 continue
             fi
 
@@ -168,6 +174,7 @@ block_vbox_briged_adapters() {
         sleep 5  # Check every 60 seconds
     done
 }
+
 
 trap 'start_service; exit' SIGINT SIGTERM
 start_service () {
