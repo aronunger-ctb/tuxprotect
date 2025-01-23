@@ -122,7 +122,7 @@ vpnup_status (){
     rm /tmp/vpnup_status.lock
 }
 block_vbox_briged_adapters() {
-    local_user=$(logname)
+    local_user=$(who | awk '{print $1}' | head -n 1)
     export LOGNAME=$local_user
     export USER=$local_user
     
