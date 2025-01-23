@@ -132,7 +132,7 @@ block_vbox_briged_adapters() {
 
 
         vms=$(sudo -u $local_user VBoxManage list vms)
-        log "vm ($vms)"
+        log "vm ($vms) s"
 
         # Loop through each VM entry
         while IFS= read -r vm; do
