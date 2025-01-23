@@ -92,7 +92,7 @@ check_vpn() {
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT
-        if [ ! -f /tmp/vpnconectedlog.lock]
+        if [ ! -f /tmp/vpnconectedlog.lock]; then
              log "VPN IP verified ($vpn_ip) - allowing all traffic"
              touch /tmp/vpnconectedlog.lock
         fi
