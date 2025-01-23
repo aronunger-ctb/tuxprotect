@@ -81,17 +81,21 @@ check_vpn() {
             vpn_log "TUN interface down - restarting VPN"
             block_internet
             start_vpn
+            rm /tmp/vpnconectedlog.lock
         fi
     fi
     local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
     local expected_ip="100.77.0.14"  # The IP we expect from the VPN
     if [ "$vpn_ip" = "$expected_ip" ]; then
-        log "VPN IP verified ($vpn_ip) - allowing all traffic"
-
+        
         iptables -F  # Flush all rules
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT
+        if [ ! -f /tmp/vpnconectedlog.lock]
+             log "VPN IP verified ($vpn_ip) - allowing all traffic"
+             touch /tmp/vpnconectedlog.lock
+        fi
     fi
     if [ ! -f /tmp/vpnup_status.lock ]; then
         vpnup_status &
