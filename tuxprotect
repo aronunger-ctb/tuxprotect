@@ -125,6 +125,7 @@ block_vbox_briged_adapters() {
     local_user=$(logname)
     export LOGNAME=$local_user
     export USER=$local_user
+    log "$local_user"
 
     while true; do
         # Get a list of all VMs (names and UUIDs)
