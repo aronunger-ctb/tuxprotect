@@ -56,6 +56,16 @@ start_vpn() {
         sleep 5
 
         # Verify VPN connection
+       
+
+       # Set a timeout for the curl request (e.g., 10 seconds)
+        netfree=$(curl -sk --max-time 1 https://api.internal.netfree.link/user/info)
+       # Check if "isNetFree":true exists in the response
+        if [[ "$netfree" == *'"isNetFree":true'* ]]; then
+            log "NetFree is active: $netfree"
+        else
+            log "NetFree is not active or an error occurred: $netfree"
+        fi
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
             if [ "$vpn_ip" = "100.77.0.14" ]; then
@@ -132,11 +142,11 @@ block_vbox_briged_adapters() {
     
     while true; do
         # Get a list of all VMs (names and UUIDs)
-        log "($local_user)"
+       #log "($local_user)"
 
 
         vms=$(sudo -u $local_user VBoxManage list vms)
-        log "vm ($vms) s"
+        #log "vm ($vms) s"
 
         # Loop through each VM entry
         while IFS= read -r vm; do
@@ -156,14 +166,14 @@ block_vbox_briged_adapters() {
                 continue
             fi
 
-            log "Checking VM: $vm_name ($vm_uuid)"
+            #log "Checking VM: $vm_name ($vm_uuid)"
 
             # Check network adapters for bridged mode
             for adapter in {1..4}; do
                 nic_type=$(sudo -u $local_user VBoxManage showvminfo "$vm_uuid" --machinereadable | grep "nic$adapter" | cut -d'=' -f2 | tr -d '"')
 
                 if [[ $nic_type == "bridged" ]]; then
-                    log "VM '$vm_name' ($vm_uuid) is using a bridged network on adapter $adapter."
+                    #log "VM '$vm_name' ($vm_uuid) is using a bridged network on adapter $adapter."
 
                     # Stop the VM if it is running
                     vm_state=$(sudo -u $local_user VBoxManage showvminfo "$vm_uuid" --machinereadable | grep -E '^VMState=' | cut -d'=' -f2 | tr -d '"')
