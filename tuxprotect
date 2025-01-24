@@ -58,14 +58,7 @@ start_vpn() {
         # Verify VPN connection
        
 
-       # Set a timeout for the curl request (e.g., 10 seconds)
-        netfree=$(curl -sk --max-time 1 https://api.internal.netfree.link/user/info)
-       # Check if "isNetFree":true exists in the response
-        if [[ "$netfree" == *'"isNetFree":true'* ]]; then
-            log "NetFree is active: $netfree"
-        else
-            log "NetFree is not active or an error occurred: $netfree"
-        fi
+       
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
             if [ "$vpn_ip" = "100.77.0.14" ]; then
@@ -81,6 +74,14 @@ start_vpn() {
 }
 
 check_vpn() {
+    # Set a timeout for the curl request (e.g., 10 seconds)
+        netfree=$(curl -sk --max-time 1 https://api.internal.netfree.link/user/info)
+       # Check if "isNetFree":true exists in the response
+        if [[ "$netfree" == *'"isNetFree":true'* ]]; then
+            log "NetFree is active: $netfree"
+        else
+            log "NetFree is not active or an error occurred: $netfree"
+        fi
     if ! pgrep openvpn >/dev/null; then
         vpn_log "VPN connection lost - attempting reconnection"
         block_internet
