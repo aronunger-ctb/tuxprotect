@@ -337,8 +337,8 @@ iptables -A INPUT -s 100.77.0.190 -j ACCEPT
 iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
 
 # Allow traffic to/from your VPN server (for reconnection attempts)
-iptables -A INPUT -s 173.68.147.11 -j ACCEPT
-iptables -A OUTPUT -d 173.68.147.11 -j ACCEPT
+iptables -A INPUT -s 66.23.206.163 -j ACCEPT
+iptables -A OUTPUT -d 66.23.206.163 -j ACCEPT
 
 
 # Allow traffic from your local networks.
