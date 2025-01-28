@@ -61,7 +61,7 @@ start_vpn() {
        
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-            if [ "$vpn_ip" = "100.77.0.14" ]; then
+            if [ "$vpn_ip" = "100.77.1.59" ]; then
                 vpn_log "VPN connected successfully with correct IP"
                 return 0
             fi
@@ -96,7 +96,7 @@ check_vpn() {
         fi
     fi
     local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    local expected_ip="100.77.0.14"  # The IP we expect from the VPN
+    local expected_ip="100.77.1.59"  # The IP we expect from the VPN
     if [ "$vpn_ip" = "$expected_ip" ]; then
         
         iptables -F  # Flush all rules
