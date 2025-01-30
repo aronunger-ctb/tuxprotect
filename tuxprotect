@@ -308,6 +308,10 @@ block_internet() {
     iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
     iptables -A INPUT -p udp --sport 53 -j ACCEPT
     iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+    iptables -A INPUT -s 8.8.8.8 -j ACCEPT
+    iptables -A OUTPUT -d 8.8.8.8 -j ACCEPT
+    iptables -A INPUT -s 8.8.4.4 -j ACCEPT
+    iptables -A OUTPUT -d 8.8.4.4 -j ACCEPT
 
     # Allow traffic to/from your trusted IP (e.g., for SSH access)
     iptables -A INPUT -s 100.77.0.190 -j ACCEPT
