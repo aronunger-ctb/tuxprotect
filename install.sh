@@ -10,7 +10,8 @@ configure_vpn() {
     echo "1) US Server (New York)"
     echo "2) UK Server (London)"
     echo "3) Israel Server (Tel Aviv)"
-    read -p "Enter your choice (1-3): " choice
+    echo "4) France Server (Rome)"
+    read -p "Enter your choice (1-4): " choice
 
     # Prompt user to enter NetFree username
     read -p "Enter your NetFree username: " vpn_user
@@ -30,9 +31,10 @@ configure_vpn() {
     # Determine remote server line based on user choice
     local remote_line=""
     case $choice in
-        1) remote_line="remote 173.68.147.11 143" ;;
-        2) remote_line="remote 77.68.76.69 143" ;;
-        3) remote_line="remote 185.217.99.140 143" ;;
+        1) remote_line="remote vpn-us-nyc1.netfree.link 143" ;;
+        2) remote_line="remote s.uk1.nfaw.netfree.link 143" ;;
+        3) remote_line="remote s.il1.nfaw.netfree.link 143" ;;
+        4) remote_line="remote vpn-fr1.netfree.link 143"
         *) remote_line="remote 173.68.147.11 143" ;;
     esac
 
