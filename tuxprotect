@@ -318,13 +318,35 @@ block_internet() {
     iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
 
     # Allow traffic to/from your VPN server and netfree api (for reconnection attempts)
+    # us server
     NETFREE_US_VPN_SERVER=$(dig +short vpn-us-nyc1.netfree.link)
     for ip in $NETFREE_US_VPN_SERVER; do
         iptables -A INPUT -s $ip -j ACCEPT
         iptables -A OUTPUT -d $ip  -j ACCEPT
         main_log $ip
     done
-    
+    # uk server
+    NETFREE_UK_VPN_SERVER=$(dig +short s.uk1.nfaw.netfree.link)
+    for ip in $NETFREE_Uk_VPN_SERVER; do
+        iptables -A INPUT -s $ip -j ACCEPT
+        iptables -A OUTPUT -d $ip  -j ACCEPT
+        main_log $ip
+    done
+    # isreal server
+    NETFREE_IL_VPN_SERVER=$(dig +short s.il1.nfaw.netfree.link)
+    for ip in $NETFREE_IL_VPN_SERVER; do
+        iptables -A INPUT -s $ip -j ACCEPT
+        iptables -A OUTPUT -d $ip  -j ACCEPT
+        main_log $ip
+    done
+    # france server
+    NETFREE_Fr_VPN_SERVER=$(dig +short vpn-fr1.netfree.link)
+    for ip in $NETFREE_FR_VPN_SERVER; do
+        iptables -A INPUT -s $ip -j ACCEPT
+        iptables -A OUTPUT -d $ip  -j ACCEPT
+        main_log $ip
+    done
+    # netfree api
     NETFREE_API=$(dig +short https://api.internal.netfree.link)
     for ip in $NETFREE_API; do
         iptables -A INPUT -s $ip -j ACCEPT
