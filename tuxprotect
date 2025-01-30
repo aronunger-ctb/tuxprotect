@@ -317,13 +317,21 @@ block_internet() {
     iptables -A INPUT -s 100.77.0.190 -j ACCEPT
     iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
 
-    # Allow traffic to/from your VPN server (for reconnection attempts)
-    iptables -A INPUT -s 66.23.206.163 -j ACCEPT
-    iptables -A OUTPUT -d 66.23.206.163 -j ACCEPT
+    # Allow traffic to/from your VPN server and netfree api (for reconnection attempts)
+    NETFREE_US_VPN_SERVER=$(dig +short vpn-us-nyc1.netfree.link)
+    for ip in $NETFREE_US_VPN_SERVER; do
+        iptables -A INPUT -s $ip -j ACCEPT
+        iptables -A OUTPUT -d $ip  -j ACCEPT
+        main_log $ip
+    done
+    
     NETFREE_API=$(dig +short https://api.internal.netfree.link)
-    main_log $NETFREE_API
-    iptables -A INPUT -s $NETFREE_API -j ACCEPT
-    iptables -A OUTPUT -d $NETFREE_API -j ACCEPT
+    for ip in $NETFREE_API; do
+        iptables -A INPUT -s $ip -j ACCEPT
+        iptables -A OUTPUT -d $ip -j ACCEPT\
+        main_log $ip
+    done
+    
     
 
     # Allow traffic from your local networks.
