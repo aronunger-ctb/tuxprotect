@@ -320,6 +320,11 @@ block_internet() {
     # Allow traffic to/from your VPN server (for reconnection attempts)
     iptables -A INPUT -s 66.23.206.163 -j ACCEPT
     iptables -A OUTPUT -d 66.23.206.163 -j ACCEPT
+    NETFREE_API=$(dig +short https://api.internal.netfree.link)
+    main_log $NETFREE_API
+    iptables -A INPUT -s $NETFREE_API -j ACCEPT
+    iptables -A OUTPUT -d $NETFREE_API -j ACCEPT
+    
 
     # Allow traffic from your local networks.
     iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
