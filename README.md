@@ -4,6 +4,10 @@
   <img src="./res/icons/logo.jpg" alt="Logo">
 </p>
 
+## announcement
+###
+this project is not ready yet I hope I will finish up fixing all the bugs in the next few weeks
+
 ## Features
 
 ### Network Connection Blocking: 
