@@ -3,16 +3,27 @@
 LOG_DIR="/var/log/tuxprotect"
 VPN_LOG="$LOG_DIR/vpn.log"
 MAIN_LOG="$LOG_DIR/tuxprotect.log"
+
 log() {
-    local message="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-    echo "$message" >> "$MAIN_LOG"
-    [ "$2" = "verbose" ] && echo "$message"
+    local level="$1"
+    local message="$2"
+    local log_file="$3"
+    local timestamp="[$(date '+%Y-%m-%d %H:%M:%S')]"
+    local log_message="$timestamp [$level] $message"
+    
+    echo "$log_message" >> "$log_file"
+    [ "$4" = "verbose" ] && echo "$log_message"
 }
+
+main_log() {
+    log "INFO" "$1" "$MAIN_LOG" "$2"
+}
+
 vpn_log() {
-    local message="[$(date '+%Y-%m-%d %H:%M:%S')] VPN: $1"
-    echo "$message" >> "$VPN_LOG"
-    log "$message"
+    log "VPN" "$1" "$VPN_LOG" "$2"
+    main_log "$1" "$2"
 }
+
 rotate_logs() {
     for logfile in "$LOG_DIR"/*.log; do
         if [ -f "$logfile" ] && [ $(stat -f%z "$logfile") -gt 10485760 ]; then # 10MB
@@ -21,6 +32,7 @@ rotate_logs() {
         fi
     done
 }
+
 verify_vpn_config() {
     local config="/usr/share/tuxprotect/vpn/netfree.ovpn"
 
@@ -37,6 +49,7 @@ verify_vpn_config() {
 
     return 0
 }
+
 start_vpn() {
     vpn_log "Starting VPN connection..."
 
@@ -56,9 +69,6 @@ start_vpn() {
         sleep 5
 
         # Verify VPN connection
-       
-
-       
         if ip addr show tun0 >/dev/null 2>&1; then
             vpn_ip=$(ip addr show tun0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
             if [ "$vpn_ip" = "100.77.1.59" ]; then
@@ -75,41 +85,22 @@ start_vpn() {
 
 check_vpn() {
     # Set a timeout for the curl request (e.g., 10 seconds)
-        netfree=$(curl -sk --max-time 1 https://api.internal.netfree.link/user/info)
-       # Check if "isNetFree":true exists in the response
-        if [[ "$netfree" == *'"isNetFree":true'* ]]; then
-            log "NetFree is active: $netfree"
-        else
-            log "NetFree is not active or an error occurred: $netfree"
-        fi
-    if ! pgrep openvpn >/dev/null; then
-        vpn_log "VPN connection lost - attempting reconnection"
-        block_internet
-        start_vpn
-    else
-        # Check if VPN is actually connected
-        if ! ip link show tun0 &>/dev/null; then
-            vpn_log "TUN interface down - restarting VPN"
-            block_internet
-            start_vpn
-            rm /tmp/vpnconectedlog.lock
-        fi
-    fi
-    local vpn_ip=$(ip addr show tun0 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}')
-    local expected_ip="100.77.1.59"  # The IP we expect from the VPN
-    if [ "$vpn_ip" = "$expected_ip" ]; then
-        
+    netfree=$(curl -sk --max-time 1 https://api.internal.netfree.link/user/info)
+    # Check if "isNetFree":true exists in the response
+    if [[ "$netfree" == *'"isNetFree":true'* ]]; then
+        main_log "NetFree is active: $netfree"
         iptables -F  # Flush all rules
         iptables -P INPUT ACCEPT
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT
-        if [ ! -f /tmp/vpnconectedlog.lock]; then
-             log "VPN IP verified ($vpn_ip) - allowing all traffic"
-             touch /tmp/vpnconectedlog.lock
-        fi
-    fi
-    if [ ! -f /tmp/vpnup_status.lock ]; then
-        vpnup_status &
+        main_log "Allowing all traffic"
+    else
+        main_log "NetFree is not active or an error occurred: $netfree"
+        main_log "Not Connected to NetFree"
+        block_internet
+        killall openvpn
+        sleep 5
+        start_vpn
     fi
 
     install_if_not_present curl
@@ -117,25 +108,11 @@ check_vpn() {
     install_if_not_present openssl
     install_if_not_present jq
     install_if_not_present openvpn
-    # Get VPN IP and check it
-
-
 
     # Rotate logs if needed
     rotate_logs
 }
-vpnup_status (){
-     touch /tmp/vpnup_status.lock
-    while true; do
-        sleep 60
-        if ! ping -c 1 -W 10 173.68.147.11 >/dev/null 2>&1; then
-            log "VPN connection not responding - forcing restart"
-            killall openvpn
-            block_internet
-        fi
-    done
-    rm /tmp/vpnup_status.lock
-}
+
 block_vbox_briged_adapters() {
     local_user=$(who | awk '{print $1}' | head -n 1)
     export LOGNAME=$local_user
@@ -311,67 +288,76 @@ notification() {
 	fi
 }
 block_internet() {
-    vpn_log "internet blocked"
+    vpn_log "Internet blocked"
     iptables -F          # Flush all existing rules
-iptables -X          # Delete user-defined chains
-iptables -P INPUT DROP   # Default policy for INPUT is DROP
-iptables -P OUTPUT DROP  # Default policy for OUTPUT is DROP
-iptables -P FORWARD DROP # Default policy for FORWARD is DROP
+    iptables -X          # Delete user-defined chains
+    iptables -P INPUT DROP   # Default policy for INPUT is DROP
+    iptables -P OUTPUT DROP  # Default policy for OUTPUT is DROP
+    iptables -P FORWARD DROP # Default policy for FORWARD is DROP
 
-# Allow loopback traffic
-iptables -A INPUT -i lo -j ACCEPT
-iptables -A OUTPUT -o lo -j ACCEPT
+    # Allow loopback traffic
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
 
-# Allow established and related connections (CRUCIAL, place early)
-iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    # Allow established and related connections (CRUCIAL, place early)
+    iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+    iptables -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# Allow outgoing DNS requests (Important for resolving VPN server address)
-iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
-iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
-iptables -A INPUT -p udp --sport 53 -j ACCEPT
-iptables -A INPUT -p tcp --sport 53 -j ACCEPT
+    # Allow outgoing DNS requests (Important for resolving VPN server address)
+    iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    iptables -A INPUT -p udp --sport 53 -j ACCEPT
+    iptables -A INPUT -p tcp --sport 53 -j ACCEPT
 
-# Allow traffic to/from your trusted IP (e.g., for SSH access)
-iptables -A INPUT -s 100.77.0.190 -j ACCEPT
-iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
+    # Allow traffic to/from your trusted IP (e.g., for SSH access)
+    iptables -A INPUT -s 100.77.0.190 -j ACCEPT
+    iptables -A OUTPUT -d 100.77.0.190 -j ACCEPT
 
-# Allow traffic to/from your VPN server (for reconnection attempts)
-iptables -A INPUT -s 66.23.206.163 -j ACCEPT
-iptables -A OUTPUT -d 66.23.206.163 -j ACCEPT
+    # Allow traffic to/from your VPN server (for reconnection attempts)
+    iptables -A INPUT -s 66.23.206.163 -j ACCEPT
+    iptables -A OUTPUT -d 66.23.206.163 -j ACCEPT
 
+    # Allow traffic from your local networks.
+    iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
+    iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
+    iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
+    iptables -A INPUT -s 1.2.3.4 -j ACCEPT
+    iptables -A INPUT -s 51.89.182.69 -j ACCEPT
+    iptables -A INPUT -s 93.184.216.34 -j ACCEPT
 
-# Allow traffic from your local networks.
-iptables -A INPUT -s 192.168.0.0/16 -j ACCEPT
-iptables -A INPUT -s 127.16.0.0/12 -j ACCEPT
-iptables -A INPUT -s 10.0.0.0/8 -j ACCEPT
-iptables -A INPUT -s 1.2.3.4 -j ACCEPT
-iptables -A INPUT -s 51.89.182.69 -j ACCEPT
-iptables -A INPUT -s 93.184.216.34 -j ACCEPT
-
-
-# Reject/Drop everything else (this is now effective)
-iptables -A INPUT -j REJECT
-iptables -A OUTPUT -j REJECT
-	iptables -A INPUT -j REJECT
-       iptables -L -v -n 2>&1 | while IFS= read -r line; do
+    # Reject/Drop everything else (this is now effective)
+    iptables -A INPUT -j REJECT
+    iptables -A OUTPUT -j REJECT
+    iptables -L -v -n 2>&1 | while IFS= read -r line; do
         vpn_log "$line"
     done
 }
+
+disable_ipv6() {
+    main_log "Disabling IPv6"
+    sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=1
+    sysctl -w net.ipv6.conf.lo.disable_ipv6=1
+}
 main () {
-    log "Starting Tux Protect service" "verbose"
+    main_log "Starting Tux Protect service" "verbose"
+
+    # Disable IPv6
 
     # Verify VPN config before starting service
     if ! verify_vpn_config; then
-        log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
+        main_log "ERROR: Invalid VPN configuration - please run install script again" "verbose"
         exit 1
     fi
 
-    start_service
+   
     block_internet
+    disable_ipv6
+
+
 
     if ! start_vpn; then
-        log "Initial VPN start failed - will retry" "verbose"
+        main_log "Initial VPN start failed - will retry" "verbose"
     fi
 
     indicator $shieldc &
@@ -383,7 +369,6 @@ main () {
     done
 }
 main
-
 
 
 
