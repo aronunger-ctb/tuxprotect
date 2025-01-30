@@ -98,9 +98,19 @@ check_vpn() {
         main_log "NetFree is not active or an error occurred: $netfree"
         main_log "Not Connected to NetFree"
         block_internet
-        killall openvpn
-        sleep 5
-        start_vpn
+        netfree_try_again=$(curl -sk --max-time 10 https://api.internal.netfree.link/user/info)
+        if [[ "$netfree_try_again" == *'"isNetFree":true'* ]]; then
+            main_log "NetFree is active: $netfree"
+            iptables -F  # Flush all rules
+            iptables -P INPUT ACCEPT
+            iptables -P OUTPUT ACCEPT
+            iptables -P FORWARD ACCEPT
+            main_log "Allowing all traffic"
+        else
+            killall openvpn
+            start_vpn
+        fi
+        
     fi
 
     install_if_not_present curl
