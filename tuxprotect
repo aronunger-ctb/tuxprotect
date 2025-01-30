@@ -3,6 +3,7 @@
 LOG_DIR="/var/log/tuxprotect"
 VPN_LOG="$LOG_DIR/vpn.log"
 MAIN_LOG="$LOG_DIR/tuxprotect.log"
+last_route=""
 
 log() {
     local level="$1"
@@ -94,6 +95,48 @@ check_vpn() {
         iptables -P OUTPUT ACCEPT
         iptables -P FORWARD ACCEPT
         main_log "Allowing all traffic"
+
+        # Check if the IP route table has changed
+        current_route=$(ip route show)
+        if [[ "$current_route" != "$last_route" ]]; then
+            
+
+            # New code to ensure all traffic is routed through the VPN
+            VPN_IF=$(ip -o link show | awk -F': ' '/tun[0-9]/ {print $2; exit}')
+            VPN_SERVER=$  # Your VPN server's IP
+            VPN_GW=$(ip route show dev $VPN_IF | awk '/via/ {print $3; exit}')
+            DEFAULT_IF=$(ip route show default | awk '{print $5; exit}')
+            DEFAULT_GW=$(ip route show default | awk '{print $3; exit}')
+
+            if [[ -z "$VPN_GW" ]]; then
+                main_log "[!] Could not detect VPN gateway. Exiting."
+                exit 1
+            fi
+
+            main_log "[+] VPN detected on $VPN_IF (Gateway: $VPN_GW)"
+            main_log "[+] Default Interface: $DEFAULT_IF"
+            main_log "[+] Default Gateway: $DEFAULT_GW"
+
+            # Preserve the route to the VPN server
+            main_log "[+] Ensuring VPN server ($VPN_SERVER) is still reachable..."
+            ip route add $VPN_SERVER via $DEFAULT_GW dev $DEFAULT_IF
+
+            # Remove all old default routes to prevent leaks
+            main_log "[+] Removing old default gateway ($DEFAULT_GW)..."
+            ip route del default via $DEFAULT_GW dev $DEFAULT_IF
+
+            # Add a new default route through VPN
+            main_log "[+] Forcing all traffic through VPN ($VPN_GW)..."
+            ip route add default via $VPN_GW dev $VPN_IF
+
+            # Disable IPv6 to prevent leaks
+            main_log "[+] Disabling IPv6 to prevent leaks..."
+            sysctl -w net.ipv6.conf.all.disable_ipv6=1 > /dev/null
+            sysctl -w net.ipv6.conf.default.disable_ipv6=1 > /dev/null
+
+            main_log "[+] Done! Checking new routing table:"
+            last_route=$(ip route show)
+        fi
     else
         main_log "NetFree is not active or an error occurred: $netfree"
         main_log "Not Connected to NetFree"
