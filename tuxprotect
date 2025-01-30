@@ -360,7 +360,7 @@ block_internet() {
     NETFREE_API=$(dig +short https://api.internal.netfree.link)
     for ip in $NETFREE_API; do
         iptables -A INPUT -s $ip -j ACCEPT
-        iptables -A OUTPUT -d $ip -j ACCEPT\
+        iptables -A OUTPUT -d $ip -j ACCEPT
         main_log $ip
     done
     
