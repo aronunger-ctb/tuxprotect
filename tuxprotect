@@ -98,7 +98,7 @@ check_vpn() {
 
         # Check if the IP route table has changed
         current_route=$(ip route show)
-       :' if [[ "$current_route" != "$last_route" ]]; then
+        if [[ "$current_route" != "$last_route" ]]; then
             
 
             # New code to ensure all traffic is routed through the VPN
@@ -136,7 +136,7 @@ check_vpn() {
 
             main_log "[+] Done! Checking new routing table:"
             last_route=$(ip route show)
-        fi'
+        fi
     else
         main_log "NetFree is not active or an error occurred: $netfree"
         main_log "Not Connected to NetFree"
