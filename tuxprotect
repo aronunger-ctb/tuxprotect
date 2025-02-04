@@ -457,6 +457,8 @@ main () {
 
     indicator $shieldc &
     block_vbox_briged_adapters &
+    ensure_immutable &
+
 
     while true; do
         check_vpn
