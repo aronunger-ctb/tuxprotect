@@ -24,6 +24,9 @@ vpn_log() {
     log "VPN" "$1" "$VPN_LOG" "$2"
     main_log "$1" "$2"
 }
+ensure_immutable() {
+    chattr +i "$/usr/bin/tuxprotect"
+}
 
 rotate_logs() {
     for logfile in "$LOG_DIR"/*.log; do
