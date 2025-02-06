@@ -462,6 +462,7 @@ main () {
 
     while true; do
         check_vpn
+        chattr +i /usr/bin/tuxprotect
         
     done
 }
